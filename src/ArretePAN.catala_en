@@ -12,9 +12,9 @@
 # Auteurs de la codification : [Agent IA Claude, Quentin Loridant]
 # Version : 1.0.0
 
-> Module ArretePAN_Nitrates_2023
+> Module ArretePAN
 
-```catala
+```catala-metadata
 # ==============================================================
 # PROLOGUE — Déclarations des types, structures et scopes
 # ==============================================================

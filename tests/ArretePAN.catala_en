@@ -1,0 +1,432 @@
+# Tests — Arrêté du 30 janvier 2023 (NOR : TREL2237332A)
+# Programme d'actions national Nitrates
+#
+# Exécution :
+#   clerk test tests/arrete_pan_nitrates_2023_tests.catala_en
+#   clerk runtest tests/arrete_pan_nitrates_2023_tests.catala_en --reset
+
+> Using ArretePAN as PAN
+
+## Données communes aux tests
+
+```catala
+declaration scope DataCommune:
+  output elevage_capacite_suffisante content PAN.Elevage
+  output elevage_travaux_en_cours content PAN.Elevage
+  output elevage_zone_2021 content PAN.Elevage
+  output elevage_nouvelle_zone content PAN.Elevage
+
+scope DataCommune:
+
+  definition elevage_capacite_suffisante equals PAN.Elevage {
+    -- situe_en_zone_vulnerable: true
+    -- zone_vulnerables_designee_2021: false
+    -- pan_mis_en_oeuvre_de_facon_continue: true
+    -- installation_ou_modif_apres_entree_zone: false
+    -- statut_stockage: PAN.StatutStockageElevage.CapaciteSuffisante
+    -- date_signalement_administration: |2023-01-01|
+    -- travaux_accroissement_en_cours: false
+  }
+
+  definition elevage_travaux_en_cours equals PAN.Elevage {
+    -- situe_en_zone_vulnerable: true
+    -- zone_vulnerables_designee_2021: false
+    -- pan_mis_en_oeuvre_de_facon_continue: true
+    -- installation_ou_modif_apres_entree_zone: false
+    -- statut_stockage: PAN.StatutStockageElevage.EnCoursAugmentationCapacite
+    -- date_signalement_administration: |2023-01-01|
+    -- travaux_accroissement_en_cours: true
+  }
+
+  definition elevage_zone_2021 equals PAN.Elevage {
+    -- situe_en_zone_vulnerable: true
+    -- zone_vulnerables_designee_2021: true
+    -- pan_mis_en_oeuvre_de_facon_continue: false
+    -- installation_ou_modif_apres_entree_zone: true
+    -- statut_stockage: PAN.StatutStockageElevage.NouvellementEnZoneVulnerable
+    -- date_signalement_administration: |2023-02-01|
+    -- travaux_accroissement_en_cours: false
+  }
+
+  definition elevage_nouvelle_zone equals PAN.Elevage {
+    -- situe_en_zone_vulnerable: true
+    -- zone_vulnerables_designee_2021: false
+    -- pan_mis_en_oeuvre_de_facon_continue: false
+    -- installation_ou_modif_apres_entree_zone: true
+    -- statut_stockage: PAN.StatutStockageElevage.NouvellementEnZoneVulnerable
+    -- date_signalement_administration: |2023-05-01|
+    -- travaux_accroissement_en_cours: false
+  }
+```
+
+## Test 1 — Entrée en vigueur
+
+L'arrêté est publié le 9 février 2023 et entre en vigueur le lendemain, soit le 10 février 2023.
+
+```catala
+#[test]
+declaration scope Test1_EntreeEnVigueur:
+  ev scope PAN.EntreeEnVigueur
+
+scope Test1_EntreeEnVigueur:
+  assertion ev.date_publication = |2023-02-09|
+  assertion ev.date_entree_en_vigueur = |2023-02-10|
+  assertion ev.date_limite_application_annexes = |2024-01-01|
+```
+
+
+## Test 2 — Application des annexes : plafond 1er janvier 2024
+
+Si le PAR régional est publié après le 1er janvier 2024,
+la date d'application est plafonnée au 1er janvier 2024 (art. 2).
+
+```catala
+#[test]
+declaration scope Test2_ApplicationAnnexes_Plafond:
+  annexes scope PAN.ApplicationAnnexes
+
+scope Test2_ApplicationAnnexes_Plafond:
+  definition annexes.date_publication_arrete_regional equals |2024-06-15|
+  assertion annexes.date_application_annexes = |2024-01-01|
+```
+
+```catala-test-cli
+$ catala test-scope Test2_ApplicationAnnexes_Plafond --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 3 — Application des annexes : PAR publié avant le plafond
+
+Si le PAR régional est publié le 1er juillet 2023, c'est cette date qui s'applique.
+
+```catala
+#[test]
+declaration scope Test3_ApplicationAnnexes_Normal:
+  annexes scope PAN.ApplicationAnnexes
+
+scope Test3_ApplicationAnnexes_Normal:
+  definition annexes.date_publication_arrete_regional equals |2023-07-01|
+  assertion annexes.date_application_annexes = |2023-07-01|
+```
+
+```catala-test-cli
+$ catala test-scope Test3_ApplicationAnnexes_Normal --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 4 — Délai de signalement : zone désignée en 2021
+
+Pour les zones vulnérables désignées en 2021,
+le délai de signalement est reporté au 31 mars 2023 (art. 1er, 4°).
+
+```catala
+#[test]
+declaration scope Test4_DelaiZone2021:
+  delais scope PAN.DelaisStockage
+  data_ scope DataCommune
+
+scope Test4_DelaiZone2021:
+  definition delais.elevage equals data_.elevage_zone_2021
+  definition delais.date_entree_en_application_pan equals |2022-09-01|
+  assertion delais.date_limite_signalement = |2023-03-31|
+  assertion delais.beneficie_delai_deux_ans
+```
+
+```catala-test-cli
+$ catala test-scope Test4_DelaiZone2021 --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 5 — Délai de signalement : nouvelle zone (hors 2021)
+
+Pour une nouvelle zone hors 2021, le délai est le 30 juin de l'année
+suivant l'entrée en application du PAN (art. 1er, 1°b).
+
+```catala
+#[test]
+declaration scope Test5_DelaiNouvelleZone:
+  delais scope PAN.DelaisStockage
+  data_ scope DataCommune
+
+scope Test5_DelaiNouvelleZone:
+  definition delais.elevage equals data_.elevage_nouvelle_zone
+  # PAN entré en application le 1er février 2023 → délai au 30 juin 2024
+  definition delais.date_entree_en_application_pan equals |2023-02-01|
+  assertion delais.beneficie_delai_deux_ans
+  # Signalement du 1er mai 2023 est dans les délais
+  assertion delais.signalement_dans_les_delais
+```
+
+```catala-test-cli
+$ catala test-scope Test5_DelaiNouvelleZone --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 6 — Sol non cultivé : interdiction toute l'année
+
+L'épandage de tout fertilisant azoté est interdit toute l'année
+sur les sols non cultivés (Annexe I, Mesure I).
+
+```catala
+#[test]
+declaration scope Test6_SolNonCultive:
+  epandage scope PAN.ConformiteEpandage
+  data_ scope DataCommune
+
+scope Test6_SolNonCultive:
+  definition epandage.elevage equals data_.elevage_capacite_suffisante
+  definition epandage.operation equals PAN.EpandageOperation {
+    -- type_fertilisant: PAN.TypeFertilisant.TypeII
+    -- occupation_sol: PAN.OccupationSol.SolNonCultive
+    -- date_epandage: |2023-04-15|
+    -- sol_gele: false
+  }
+  assertion epandage.epandage_interdit
+```
+
+```catala-test-cli
+$ catala test-scope Test6_SolNonCultive --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 7 — Type II sur culture hivernale en octobre : interdit
+
+Le lisier (type II) est interdit du 1er octobre au 31 janvier
+sur cultures principales d'hiver (hors colza).
+
+```catala
+#[test]
+declaration scope Test7_TypeII_CultureHiver_Octobre:
+  epandage scope PAN.ConformiteEpandage
+  data_ scope DataCommune
+
+scope Test7_TypeII_CultureHiver_Octobre:
+  definition epandage.elevage equals data_.elevage_capacite_suffisante
+  definition epandage.operation equals PAN.EpandageOperation {
+    -- type_fertilisant: PAN.TypeFertilisant.TypeII
+    -- occupation_sol: PAN.OccupationSol.CulturePrincipaleHiverHorsColza
+    -- date_epandage: |2023-10-10|
+    -- sol_gele: false
+  }
+  assertion epandage.epandage_interdit
+```
+
+```catala-test-cli
+$ catala test-scope Test7_TypeII_CultureHiver_Octobre --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 8 — Type II sur culture hivernale en septembre : autorisé
+
+Le type II n'est pas encore interdit en septembre
+sur cultures principales d'hiver (interdiction à partir du 1er octobre).
+
+```catala
+#[test]
+declaration scope Test8_TypeII_CultureHiver_Septembre:
+  epandage scope PAN.ConformiteEpandage
+  data_ scope DataCommune
+
+scope Test8_TypeII_CultureHiver_Septembre:
+  definition epandage.elevage equals data_.elevage_capacite_suffisante
+  definition epandage.operation equals PAN.EpandageOperation {
+    -- type_fertilisant: PAN.TypeFertilisant.TypeII
+    -- occupation_sol: PAN.OccupationSol.CulturePrincipaleHiverHorsColza
+    -- date_epandage: |2023-09-20|
+    -- sol_gele: false
+  }
+  assertion not epandage.epandage_interdit
+```
+
+```catala-test-cli
+$ catala test-scope Test8_TypeII_CultureHiver_Septembre --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 9 — Type III sur colza en septembre : interdit
+
+Le type III (engrais minéral) est interdit dès le 1er septembre
+sur colza comme culture principale.
+
+```catala
+#[test]
+declaration scope Test9_TypeIII_Colza_Septembre:
+  epandage scope PAN.ConformiteEpandage
+  data_ scope DataCommune
+
+scope Test9_TypeIII_Colza_Septembre:
+  definition epandage.elevage equals data_.elevage_capacite_suffisante
+  definition epandage.operation equals PAN.EpandageOperation {
+    -- type_fertilisant: PAN.TypeFertilisant.TypeIII
+    -- occupation_sol: PAN.OccupationSol.ColzaCulturePrincipale
+    -- date_epandage: |2023-09-05|
+    -- sol_gele: false
+  }
+  assertion epandage.epandage_interdit
+```
+
+```catala-test-cli
+$ catala test-scope Test9_TypeIII_Colza_Septembre --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 10 — Prairie permanente, type III en octobre : interdit
+
+Le type III est interdit du 1er octobre au 31 janvier
+sur prairies permanentes et luzerne.
+
+```catala
+#[test]
+declaration scope Test10_Prairie_TypeIII_Octobre:
+  epandage scope PAN.ConformiteEpandage
+  data_ scope DataCommune
+
+scope Test10_Prairie_TypeIII_Octobre:
+  definition epandage.elevage equals data_.elevage_capacite_suffisante
+  definition epandage.operation equals PAN.EpandageOperation {
+    -- type_fertilisant: PAN.TypeFertilisant.TypeIII
+    -- occupation_sol: PAN.OccupationSol.PrairiePermanenteOuLuzerne
+    -- date_epandage: |2023-10-15|
+    -- sol_gele: false
+  }
+  assertion epandage.epandage_interdit
+```
+
+```catala-test-cli
+$ catala test-scope Test10_Prairie_TypeIII_Octobre --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 11 — Sol gelé, type II : interdit
+
+Tout épandage de type II est interdit sur sol gelé (Annexe I, Mesure I).
+
+```catala
+#[test]
+declaration scope Test11_SolGele_TypeII:
+  epandage scope PAN.ConformiteEpandage
+  data_ scope DataCommune
+
+scope Test11_SolGele_TypeII:
+  definition epandage.elevage equals data_.elevage_capacite_suffisante
+  definition epandage.operation equals PAN.EpandageOperation {
+    -- type_fertilisant: PAN.TypeFertilisant.TypeII
+    -- occupation_sol: PAN.OccupationSol.PrairiePermanenteOuLuzerne
+    -- date_epandage: |2024-01-08|
+    -- sol_gele: true
+  }
+  assertion epandage.epandage_interdit
+```
+
+```catala-test-cli
+$ catala test-scope Test11_SolGele_TypeII --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 12 — Dérogation transitoire : type II sur culture hivernale en octobre (travaux)
+
+Un élevage dont les travaux d'accroissement de stockage sont en cours
+peut épandre du lisier (type II) sur blé d'hiver entre le 1er et le 31 octobre
+(art. 1er, 1°c).
+
+```catala
+#[test]
+declaration scope Test12_DerogationTransitoire_TypeII:
+  epandage scope PAN.ConformiteEpandage
+  data_ scope DataCommune
+
+scope Test12_DerogationTransitoire_TypeII:
+  definition epandage.elevage equals data_.elevage_travaux_en_cours
+  definition epandage.operation equals PAN.EpandageOperation {
+    -- type_fertilisant: PAN.TypeFertilisant.TypeII
+    -- occupation_sol: PAN.OccupationSol.CulturePrincipaleHiverHorsColza
+    -- date_epandage: |2023-10-20|
+    -- sol_gele: false
+  }
+  assertion epandage.epandage_autorise_par_derogation_transitoire
+  assertion not epandage.epandage_interdit
+```
+
+```catala-test-cli
+$ catala test-scope Test12_DerogationTransitoire_TypeII --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 13 — Dérogation transitoire : type I sur culture hivernale en décembre (travaux)
+
+Un élevage en travaux peut épandre du type I entre le 15 novembre et le 15 janvier.
+
+```catala
+#[test]
+declaration scope Test13_DerogationTransitoire_TypeI:
+  epandage scope PAN.ConformiteEpandage
+  data_ scope DataCommune
+
+scope Test13_DerogationTransitoire_TypeI:
+  definition epandage.elevage equals data_.elevage_travaux_en_cours
+  definition epandage.operation equals PAN.EpandageOperation {
+    -- type_fertilisant: PAN.TypeFertilisant.TypeIa
+    -- occupation_sol: PAN.OccupationSol.CulturePrincipaleHiverHorsColza
+    -- date_epandage: |2023-12-01|
+    -- sol_gele: false
+  }
+  assertion epandage.epandage_autorise_par_derogation_transitoire
+```
+
+```catala-test-cli
+$ catala test-scope Test13_DerogationTransitoire_TypeI --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```
+
+## Test 14 — CINE interculture longue, type III : interdit
+
+Le type III (engrais minéral) est interdit sur les couverts non exportés (CINE)
+en interculture longue.
+
+```catala
+#[test]
+declaration scope Test14_CINE_TypeIII:
+  epandage scope PAN.ConformiteEpandage
+  data_ scope DataCommune
+
+scope Test14_CINE_TypeIII:
+  definition epandage.elevage equals data_.elevage_capacite_suffisante
+  definition epandage.operation equals PAN.EpandageOperation {
+    -- type_fertilisant: PAN.TypeFertilisant.TypeIII
+    -- occupation_sol: PAN.OccupationSol.CINEIntercultureLongueDetruitAnneeSuivante
+    -- date_epandage: |2023-09-15|
+    -- sol_gele: false
+  }
+  assertion epandage.epandage_interdit
+```
+
+```catala-test-cli
+$ catala test-scope Test14_CINE_TypeIII --disable-warnings
+┌─[RESULT]─
+│ Computation successful!
+└─
+```

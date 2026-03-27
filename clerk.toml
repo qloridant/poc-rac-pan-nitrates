@@ -1,0 +1,8 @@
+[project]
+include_dirs = ["src"]              # Which directories to include
+build_dir    = "_build"    # Defines where to output the generated compiled files.
+target_dir   = "_target"   # Defines where to output the targets final files.
+
+[[target]]
+name = "PAN"
+modules = ["ArretePAN_Nitrates_2023"]
