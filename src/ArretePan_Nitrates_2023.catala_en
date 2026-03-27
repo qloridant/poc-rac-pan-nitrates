@@ -272,10 +272,9 @@ scope DelaisStockage:
 
   # Exception : zones vulnérables désignées en 2021
   # Le délai de signalement est reporté au 31 mars 2023
-  exception
-  definition date_limite_signalement under condition
+  exception definition date_limite_signalement under condition
     elevage.zone_vulnerables_designee_2021
-  equals |2023-03-31|
+  consequence equals |2023-03-31|
 ```
 
 # ==============================================================
@@ -297,10 +296,9 @@ scope ApplicationAnnexes:
     date_publication_arrete_regional
 
   # Exception : plafond au 1er janvier 2024
-  exception
-  definition date_application_annexes under condition
+  exception definition date_application_annexes under condition
     date_publication_arrete_regional > |2024-01-01|
-  equals |2024-01-01|
+  consequence equals |2024-01-01|
 ```
 
 # ==============================================================
