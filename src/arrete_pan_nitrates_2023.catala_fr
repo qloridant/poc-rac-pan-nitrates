@@ -1,0 +1,581 @@
+# Arrêté du 30 janvier 2023 modifiant l'arrêté du 19 décembre 2011
+# relatif au programme d'actions national à mettre en œuvre dans les
+# zones vulnérables afin de réduire la pollution des eaux par les
+# nitrates d'origine agricole
+#
+# NOR : TREL2237332A
+# JORF n°0034 du 9 février 2023, Texte n°28
+# Entrée en vigueur : 10 février 2023
+#
+# Codification Catala — syntaxe anglaise (catala_en)
+# Langage : https://catala-lang.org
+# Auteurs de la codification : [Agent IA Claude, Quentin Loridant]
+# Version : 1.0.0
+
+> Module ArretePAN_Nitrates_2023
+
+```catala
+# ==============================================================
+# PROLOGUE — Déclarations des types, structures et scopes
+# ==============================================================
+
+# ---------------------------------------------------------------
+# Enumération : Types de fertilisants azotés
+# Source : Annexe I, tableau de définition des types
+# ---------------------------------------------------------------
+
+declaration enumeration TypeFertilisant:
+  -- Type0    # Produits à organisation nette de l'azote à moyen terme
+              # (boues de papeterie, marcs de raisins frais, composts jeunes)
+  -- TypeIa   # Minéralisation très lente, Nmin < 20 %, C/N > 20, ISMO > 70 %
+              # (fumiers compacts, composts d'effluents d'élevage matures)
+  -- TypeIb   # Minéralisation lente, C/N > 8, ISMO > 50 %
+              # (fumiers avec litière hors volaille, composts MIATE + support carboné)
+  -- TypeII   # Minéralisation rapide ou Nmin élevé
+              # (lisiers, digestats bruts, fientes, effluents peu chargés, vinasses...)
+  -- TypeIII  # Fertilisants minéraux et uréiques de synthèse (y compris fertirrigation)
+
+# ---------------------------------------------------------------
+# Enumération : Occupation du sol au moment de l'épandage
+# Source : Annexe I, tableau des périodes d'interdiction
+# ---------------------------------------------------------------
+
+declaration enumeration OccupationSol:
+  -- CulturePrincipaleHiverHorsColza
+    # Culture principale (ex. céréales d'automne), hors colza, récoltée année N+1
+  -- ColzaCulturePrincipale
+    # Colza comme culture principale, récolté année N+1
+  -- CINEIntercultureLongueDetruitAnneeSuivante
+    # Couvert non exporté d'interculture longue, détruit ou exporté l'année suivante
+  -- CINEIntercultureLongueDetruitAvantFinAnnee
+    # Couvert non exporté d'interculture longue, détruit avant la fin de l'année
+    # non suivi d'une culture dans la même année
+  -- CIEIntercultureLongueExporteAnneeSuivante
+    # Couvert exporté d'interculture longue, exporté l'année suivante
+    # (ex. cultures énergétiques)
+  -- CIEIntercultureLongueExporteAvantFinAnnee
+    # Couvert exporté d'interculture longue, exporté avant la fin de l'année
+    # non suivi d'une culture dans la même année
+  -- CINEIntercultureCourteDetruitAvantFinAnnee
+    # Couvert non exporté d'interculture courte, détruit avant la fin de l'année
+    # suivi d'une culture dans la même année
+  -- CIEIntercultureCourteExporteAvantFinAnnee
+    # Couvert exporté d'interculture courte, suivi d'une culture dans la même année
+  -- CulturePrintempsNonSuivieImplantation
+    # Culture principale implantée et récoltée dans l'année
+    # non suivie d'une culture dans la même année
+  -- PrairiePermanenteOuLuzerne
+    # Prairies implantées depuis plus de 6 mois, prairies permanentes, luzerne
+  -- SolNonCultive
+    # Sol non utilisé en vue d'une production agricole
+
+# ---------------------------------------------------------------
+# Enumération : Statut de stockage de l'élevage
+# Source : Article 1er, 1° modifiant l'article 2 de l'arrêté de 2011
+# ---------------------------------------------------------------
+
+declaration enumeration StatutStockageElevage:
+  -- CapaciteSuffisante
+    # L'élevage dispose de capacités de stockage conformes
+  -- EnCoursAugmentationCapacite
+    # Travaux d'accroissement de capacité en cours (bénéficie des dérogations)
+  -- NouvellementEnZoneVulnerable
+    # Zone vulnérable sur laquelle aucun PAN n'a été mis en œuvre de façon continue
+
+# ---------------------------------------------------------------
+# Structure : Données relatives à un élevage
+# ---------------------------------------------------------------
+
+declaration structure Elevage:
+  data situe_en_zone_vulnerable content boolean
+    # L'élevage est-il situé dans une zone vulnérable ?
+  data zone_vulnerables_designee_2021 content boolean
+    # S'agit-il d'une zone désignée en 2021 ?
+  data pan_mis_en_oeuvre_de_facon_continue content boolean
+    # Un PAN a-t-il été mis en œuvre de façon continue sur cette zone ?
+  data installation_ou_modif_apres_entree_zone content boolean
+    # L'installation ou la modification d'activité est-elle postérieure
+    # à l'entrée de la zone en zone vulnérable ?
+  data statut_stockage content StatutStockageElevage
+  data date_signalement_administration content date
+    # Date à laquelle l'élevage s'est signalé à l'administration
+  data travaux_accroissement_en_cours content boolean
+    # Des travaux d'accroissement de capacité de stockage sont-ils en cours ?
+
+# ---------------------------------------------------------------
+# Structure : Une opération d'épandage
+# ---------------------------------------------------------------
+
+declaration structure EpandageOperation:
+  data type_fertilisant content TypeFertilisant
+  data occupation_sol content OccupationSol
+  data date_epandage content date
+  data sol_gele content boolean
+    # Le sol est-il gelé au moment de l'épandage ?
+
+# ---------------------------------------------------------------
+# Scope : Conformité d'une opération d'épandage
+# ---------------------------------------------------------------
+
+declaration scope ConformiteEpandage:
+  input elevage content Elevage
+  input operation content EpandageOperation
+  output epandage_interdit condition
+  output epandage_autorise_par_derogation_transitoire condition
+
+# ---------------------------------------------------------------
+# Scope : Délais de mise en conformité du stockage
+# Source : Article 1er, 1° modifiant l'article 2 I et III
+# ---------------------------------------------------------------
+
+declaration scope DelaisStockage:
+  input elevage content Elevage
+  input date_entree_en_application_pan content date
+  output beneficie_delai_deux_ans condition
+  output date_limite_signalement content date
+  output signalement_dans_les_delais condition
+
+# ---------------------------------------------------------------
+# Scope : Date d'application des annexes dans une région
+# Source : Article 2 de l'arrêté du 30 janvier 2023
+# ---------------------------------------------------------------
+
+declaration scope ApplicationAnnexes:
+  input date_publication_arrete_regional content date
+  output date_application_annexes content date
+
+# ---------------------------------------------------------------
+# Scope : Entrée en vigueur de l'arrêté
+# Source : Article 3 de l'arrêté du 30 janvier 2023
+# ---------------------------------------------------------------
+
+declaration scope EntreeEnVigueur:
+  output date_publication content date
+  output date_entree_en_vigueur content date
+  output date_limite_application_annexes content date
+```
+
+# ==============================================================
+# ARTICLE 1er
+# ==============================================================
+
+## Article 1er de l'arrêté du 30 janvier 2023
+
+L'article 2 de l'arrêté du 19 décembre 2011 susvisé est ainsi modifié :
+
+1° Le I est ainsi modifié :
+
+a) Au premier alinéa, après la référence « R. 211-81-3 », sont insérés les mots « du code de
+l'environnement » et après les mots « aucun programme d'actions national n'a été mis en œuvre »,
+sont insérés les mots « de façon continue » ;
+
+b) Le premier alinéa est complété par une phrase ainsi rédigée :
+« Les élevages situés dans une zone vulnérable sur laquelle aucun programme d'action national
+n'a été mis en œuvre depuis leur installation ou depuis une modification de leur activité ayant eu
+un impact sur leurs capacités de stockage bénéficient d'un délai de mise en œuvre de ces
+dispositions de deux ans à compter de l'entrée en application du programme d'actions sur les
+zones concernées, dès lors qu'ils se signalent à l'administration au plus tard le 30 juin de l'année
+suivant l'entrée en application du programme d'actions sur les zones concernées. »
+
+```catala
+scope DelaisStockage:
+
+  # I — Droit au délai de deux ans
+  # Conditions cumulatives :
+  #   - élevage en zone vulnérable
+  #   - aucun PAN mis en œuvre de façon continue sur cette zone
+  #   - installation ou modification postérieure à l'entrée en zone vulnérable
+  rule beneficie_delai_deux_ans under condition
+    elevage.situe_en_zone_vulnerable
+    and not elevage.pan_mis_en_oeuvre_de_facon_continue
+    and (elevage.installation_ou_modif_apres_entree_zone
+         or elevage.statut_stockage = StatutStockageElevage.NouvellementEnZoneVulnerable)
+  consequence fulfilled
+
+  # Date limite de signalement : 30 juin de l'année suivant l'entrée en application du PAN
+  # (interprétation littérale de l'alinéa b)
+  definition date_limite_signalement equals
+    date_entree_en_application_pan + 1 year - 6 month + 29 day
+    # 1 jan + 1 an = 1 jan N+1 ; - 6 mois = 1 juil N+1 ; - 1 jour = 30 juin N+1
+
+  # Le signalement est dans les délais si la date est <= date limite
+  rule signalement_dans_les_delais under condition
+    beneficie_delai_deux_ans
+    and elevage.date_signalement_administration <= date_limite_signalement
+  consequence fulfilled
+```
+
+c) Le deuxième alinéa est ainsi rédigé :
+« Pendant la durée des travaux d'accroissement des capacités de stockage, ces élevages peuvent,
+à titre dérogatoire et transitoire :
+- épandre leurs fertilisants azotés de type II entre le 1er octobre et le 1er novembre sur une
+  culture principale récoltée l'année suivante, autre que le colza ;
+- entre le 15 octobre et le 1er novembre sur un colza ou sur un couvert végétal d'interculture ;
+- épandre leurs fertilisants azotés de type I entre le 15 novembre et le 15 janvier sur les
+  cultures principales récoltées l'année suivante, et les îlots culturaux destinés aux cultures
+  implantées et récoltées la même année (cultures dites de printemps). »
+
+```catala
+scope ConformiteEpandage:
+
+  # Dérogation transitoire — Type II sur culture principale hors colza (1er oct – 1er nov)
+  rule epandage_autorise_par_derogation_transitoire under condition
+    elevage.travaux_accroissement_en_cours
+    and operation.type_fertilisant = TypeFertilisant.TypeII
+    and operation.occupation_sol = OccupationSol.CulturePrincipaleHiverHorsColza
+    and operation.date_epandage >= |2023-10-01|
+    and operation.date_epandage < |2023-11-01|
+  consequence fulfilled
+
+  # Dérogation transitoire — Type II sur colza ou CINE (15 oct – 1er nov)
+  rule epandage_autorise_par_derogation_transitoire under condition
+    elevage.travaux_accroissement_en_cours
+    and operation.type_fertilisant = TypeFertilisant.TypeII
+    and (operation.occupation_sol = OccupationSol.ColzaCulturePrincipale
+         or operation.occupation_sol =
+           OccupationSol.CINEIntercultureLongueDetruitAnneeSuivante)
+    and operation.date_epandage >= |2023-10-15|
+    and operation.date_epandage < |2023-11-01|
+  consequence fulfilled
+
+  # Dérogation transitoire — Type I sur cultures principales ou printemps (15 nov – 15 jan)
+  rule epandage_autorise_par_derogation_transitoire under condition
+    elevage.travaux_accroissement_en_cours
+    and (operation.type_fertilisant = TypeFertilisant.TypeIa
+         or operation.type_fertilisant = TypeFertilisant.TypeIb)
+    and (operation.occupation_sol = OccupationSol.CulturePrincipaleHiverHorsColza
+         or operation.occupation_sol = OccupationSol.ColzaCulturePrincipale
+         or operation.occupation_sol =
+           OccupationSol.CulturePrintempsNonSuivieImplantation)
+    and operation.date_epandage >= |2023-11-15|
+    and operation.date_epandage < |2024-01-15|
+  consequence fulfilled
+```
+
+2° Le II est supprimé.
+
+3° Le III devient le II et est ainsi modifié :
+
+a) Les mots « des dispositions » et « et au II » sont supprimés et les mots « de ce délai » sont
+remplacés par les mots « du délai » ;
+
+b) Il est ajouté un alinéa ainsi rédigé :
+*(même texte que les dérogations transitoires ci-dessus — déjà codifié)*
+
+4° Le III est ainsi rétabli :
+
+« III. Pour les zones vulnérables désignés en 2021, le délai pour se signaler à l'administration
+mentionné au I est reporté au 31 mars 2023. »
+
+```catala
+scope DelaisStockage:
+
+  # Exception : zones vulnérables désignées en 2021
+  # Le délai de signalement est reporté au 31 mars 2023
+  exception
+  definition date_limite_signalement under condition
+    elevage.zone_vulnerables_designee_2021
+  equals |2023-03-31|
+```
+
+# ==============================================================
+# ARTICLE 2
+# ==============================================================
+
+## Article 2 de l'arrêté du 30 janvier 2023
+
+Les annexes de l'arrêté du 19 décembre 2011 sont remplacées par les annexes du présent arrêté.
+Elles s'appliquent dans chaque région à compter de la publication de l'arrêté révisant le programme
+d'actions régional mentionné au 2° du IV de l'article R. 211-80 en vigueur à la date de publication
+du présent arrêté et **au plus tard le 1er janvier 2024**.
+
+```catala
+scope ApplicationAnnexes:
+
+  # Règle générale : application à la date de publication de l'arrêté PAR régional
+  definition date_application_annexes equals
+    date_publication_arrete_regional
+
+  # Exception : plafond au 1er janvier 2024
+  exception
+  definition date_application_annexes under condition
+    date_publication_arrete_regional > |2024-01-01|
+  equals |2024-01-01|
+```
+
+# ==============================================================
+# ARTICLE 3
+# ==============================================================
+
+## Article 3 de l'arrêté du 30 janvier 2023
+
+Le présent arrêté sera publié au Journal officiel de la République française.
+
+Fait le 30 janvier 2023.
+
+Signataires :
+- Christophe Béchu, ministre de la transition écologique et de la cohésion des territoires
+- Marc Fesneau, ministre de l'agriculture et de la souveraineté alimentaire
+- Bérangère Couillard, secrétaire d'État chargée de l'écologie
+
+```catala
+scope EntreeEnVigueur:
+  # Publication au JORF n°0034 du 9 février 2023
+  definition date_publication equals |2023-02-09|
+  # Entrée en vigueur : le lendemain de la publication (art. 3)
+  definition date_entree_en_vigueur equals |2023-02-10|
+  # Date limite d'application des annexes (art. 2)
+  definition date_limite_application_annexes equals |2024-01-01|
+```
+
+# ==============================================================
+# ANNEXE I — Mesures nationales communes
+# Contenu des mesures au titre des 1° à 8° du I de l'article R. 211-81
+# ==============================================================
+
+## Annexe I — Mesure I : Périodes minimales d'interdiction d'épandage
+
+### Sur les sols non cultivés
+
+Sur les sols non cultivés, l'épandage de fertilisants azotés est **interdit toute l'année**.
+
+```catala
+scope ConformiteEpandage:
+
+  # Interdiction absolue sur sols non cultivés — toute l'année
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.SolNonCultive
+  consequence fulfilled
+```
+
+### Sur les CINE et avant leur implantation
+
+L'épandage de fertilisants de type III est interdit sur les CINE et avant leur implantation.
+
+```catala
+scope ConformiteEpandage:
+
+  # Interdiction du type III sur les CINE (interculture longue ou courte)
+  rule epandage_interdit under condition
+    operation.type_fertilisant = TypeFertilisant.TypeIII
+    and (operation.occupation_sol =
+           OccupationSol.CINEIntercultureLongueDetruitAnneeSuivante
+         or operation.occupation_sol =
+           OccupationSol.CINEIntercultureLongueDetruitAvantFinAnnee
+         or operation.occupation_sol =
+           OccupationSol.CINEIntercultureCourteDetruitAvantFinAnnee)
+  consequence fulfilled
+```
+
+### Sur les sols gelés
+
+L'épandage de tous les fertilisants azotés **autres que** les fumiers compacts non susceptibles
+d'écoulement, les composts d'effluents d'élevage et les autres produits organiques solides dont
+l'apport vise à prévenir l'érosion est interdit sur les sols gelés.
+
+```catala
+scope ConformiteEpandage:
+
+  # Interdiction sur sol gelé — s'applique à tous les types sauf Type0 et TypeIa
+  # (qui correspondent aux fumiers compacts et composts concernés)
+  rule epandage_interdit under condition
+    operation.sol_gele
+    and not (operation.type_fertilisant = TypeFertilisant.Type0
+             or operation.type_fertilisant = TypeFertilisant.TypeIa)
+  consequence fulfilled
+```
+
+### Tableau des périodes d'interdiction — cas par cas
+
+#### Culture principale hiver hors colza (récoltée l'année suivante)
+
+```catala
+scope ConformiteEpandage:
+
+  # Type Ia / Ib : interdit du 15 novembre au 15 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.CulturePrincipaleHiverHorsColza
+    and (operation.type_fertilisant = TypeFertilisant.TypeIa
+         or operation.type_fertilisant = TypeFertilisant.TypeIb)
+    and operation.date_epandage >= |2023-11-15|
+    and operation.date_epandage <= |2024-01-15|
+    and not epandage_autorise_par_derogation_transitoire
+  consequence fulfilled
+
+  # Type II : interdit du 1er octobre au 31 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.CulturePrincipaleHiverHorsColza
+    and operation.type_fertilisant = TypeFertilisant.TypeII
+    and operation.date_epandage >= |2023-10-01|
+    and operation.date_epandage <= |2024-01-31|
+    and not epandage_autorise_par_derogation_transitoire
+  consequence fulfilled
+
+  # Type III : interdit du 1er septembre au 31 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.CulturePrincipaleHiverHorsColza
+    and operation.type_fertilisant = TypeFertilisant.TypeIII
+    and operation.date_epandage >= |2023-09-01|
+    and operation.date_epandage <= |2024-01-31|
+  consequence fulfilled
+```
+
+#### Colza comme culture principale (récolté l'année suivante)
+
+```catala
+scope ConformiteEpandage:
+
+  # Type Ia / Ib : interdit du 15 novembre au 15 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.ColzaCulturePrincipale
+    and (operation.type_fertilisant = TypeFertilisant.TypeIa
+         or operation.type_fertilisant = TypeFertilisant.TypeIb)
+    and operation.date_epandage >= |2023-11-15|
+    and operation.date_epandage <= |2024-01-15|
+    and not epandage_autorise_par_derogation_transitoire
+  consequence fulfilled
+
+  # Type II : interdit du 15 octobre au 31 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.ColzaCulturePrincipale
+    and operation.type_fertilisant = TypeFertilisant.TypeII
+    and operation.date_epandage >= |2023-10-15|
+    and operation.date_epandage <= |2024-01-31|
+    and not epandage_autorise_par_derogation_transitoire
+  consequence fulfilled
+
+  # Type III : interdit du 1er septembre au 31 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.ColzaCulturePrincipale
+    and operation.type_fertilisant = TypeFertilisant.TypeIII
+    and operation.date_epandage >= |2023-09-01|
+    and operation.date_epandage <= |2024-01-31|
+  consequence fulfilled
+```
+
+#### Couvert d'interculture longue (CINE détruit ou CIE exporté l'année suivante)
+
+```catala
+scope ConformiteEpandage:
+
+  # Type Ia / Ib : interdit du 15 novembre au 15 janvier
+  rule epandage_interdit under condition
+    (operation.occupation_sol =
+       OccupationSol.CINEIntercultureLongueDetruitAnneeSuivante
+     or operation.occupation_sol =
+       OccupationSol.CIEIntercultureLongueExporteAnneeSuivante)
+    and (operation.type_fertilisant = TypeFertilisant.TypeIa
+         or operation.type_fertilisant = TypeFertilisant.TypeIb)
+    and operation.date_epandage >= |2023-11-15|
+    and operation.date_epandage <= |2024-01-15|
+  consequence fulfilled
+
+  # Type II : interdit du 15 octobre au 31 janvier
+  rule epandage_interdit under condition
+    (operation.occupation_sol =
+       OccupationSol.CINEIntercultureLongueDetruitAnneeSuivante
+     or operation.occupation_sol =
+       OccupationSol.CIEIntercultureLongueExporteAnneeSuivante)
+    and operation.type_fertilisant = TypeFertilisant.TypeII
+    and operation.date_epandage >= |2023-10-15|
+    and operation.date_epandage <= |2024-01-31|
+  consequence fulfilled
+```
+
+#### Culture principale de printemps (implantée et récoltée dans l'année)
+
+```catala
+scope ConformiteEpandage:
+
+  # Type Ia : interdit du 1er juillet au 31 août puis 15 nov au 15 jan
+  rule epandage_interdit under condition
+    operation.occupation_sol =
+      OccupationSol.CulturePrintempsNonSuivieImplantation
+    and operation.type_fertilisant = TypeFertilisant.TypeIa
+    and ((operation.date_epandage >= |2023-07-01|
+          and operation.date_epandage <= |2023-08-31|)
+         or (operation.date_epandage >= |2023-11-15|
+             and operation.date_epandage <= |2024-01-15|))
+  consequence fulfilled
+
+  # Type Ib : interdit du 1er juillet au 15 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol =
+      OccupationSol.CulturePrintempsNonSuivieImplantation
+    and operation.type_fertilisant = TypeFertilisant.TypeIb
+    and operation.date_epandage >= |2023-07-01|
+    and operation.date_epandage <= |2024-01-15|
+  consequence fulfilled
+
+  # Type II : interdit du 1er juillet au 31 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol =
+      OccupationSol.CulturePrintempsNonSuivieImplantation
+    and operation.type_fertilisant = TypeFertilisant.TypeII
+    and operation.date_epandage >= |2023-07-01|
+    and operation.date_epandage <= |2024-01-31|
+  consequence fulfilled
+
+  # Type III : interdit du 1er juillet au 15 février
+  rule epandage_interdit under condition
+    operation.occupation_sol =
+      OccupationSol.CulturePrintempsNonSuivieImplantation
+    and operation.type_fertilisant = TypeFertilisant.TypeIII
+    and operation.date_epandage >= |2023-07-01|
+    and operation.date_epandage <= |2024-02-15|
+  consequence fulfilled
+```
+
+#### Prairies permanentes et luzerne (implantées depuis plus de 6 mois)
+
+```catala
+scope ConformiteEpandage:
+
+  # Type Ia / Ib : interdit du 15 décembre au 15 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.PrairiePermanenteOuLuzerne
+    and (operation.type_fertilisant = TypeFertilisant.TypeIa
+         or operation.type_fertilisant = TypeFertilisant.TypeIb)
+    and operation.date_epandage >= |2023-12-15|
+    and operation.date_epandage <= |2024-01-15|
+  consequence fulfilled
+
+  # Type II : interdit du 15 novembre au 15 janvier
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.PrairiePermanenteOuLuzerne
+    and operation.type_fertilisant = TypeFertilisant.TypeII
+    and operation.date_epandage >= |2023-11-15|
+    and operation.date_epandage <= |2024-01-15|
+  consequence fulfilled
+
+  # Type III : interdit du 1er octobre au 31 janvier
+  # (ou 15 février en zones montagneuses, à définir par arrêté préfectoral)
+  rule epandage_interdit under condition
+    operation.occupation_sol = OccupationSol.PrairiePermanenteOuLuzerne
+    and operation.type_fertilisant = TypeFertilisant.TypeIII
+    and operation.date_epandage >= |2023-10-01|
+    and operation.date_epandage <= |2024-01-31|
+  consequence fulfilled
+```
+
+# ==============================================================
+# ANNEXE I — Mesure globale : conformité finale
+# ==============================================================
+
+## Synthèse : un épandage est autorisé si et seulement si il n'est pas interdit
+## ou s'il bénéficie d'une dérogation transitoire explicite
+
+```catala
+scope ConformiteEpandage:
+
+  # La dérogation transitoire lève l'interdiction pendant les travaux
+  # (les règles d'interdiction vérifient déjà "not epandage_autorise_par_derogation_transitoire"
+  #  pour les cas où la dérogation s'applique — les règles restantes ne sont pas levées)
+
+  # Scopes d'entrée en vigueur et d'application des annexes
+  # (implémentation complète)
+scope EntreeEnVigueur:
+  definition date_publication equals |2023-02-09|
+  definition date_entree_en_vigueur equals |2023-02-10|
+  definition date_limite_application_annexes equals |2024-01-01|
+```

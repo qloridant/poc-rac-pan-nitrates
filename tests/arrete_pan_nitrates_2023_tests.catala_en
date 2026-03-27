@@ -1,0 +1,272 @@
+# Tests de la codification Catala
+# Arrêté du 30 janvier 2023 — NOR : TREL2237332A
+#
+# Chaque test correspond à un cas concret tiré du texte ou de sa notice.
+# Commande d'exécution :
+#   catala test arrete_pan_nitrates_2023_tests.catala_en
+
+> Using ArretePAN_Nitrates_2023
+
+```catala
+# ==============================================================
+# TEST 1 — Épandage interdit : sol non cultivé en avril
+# Attendu : epandage_interdit = true
+# ==============================================================
+#
+# Un exploitant tente d'épandre un fertilisant de type II
+# sur un sol non cultivé le 15 avril. C'est interdit toute l'année.
+
+declaration scope Test_SolNonCultive:
+  output resultat content boolean
+
+scope Test_SolNonCultive:
+  definition resultat equals
+    let verification scope ConformiteEpandage in
+    let _ = verification.elevage <- Elevage {
+      -- situe_en_zone_vulnerable: true
+      -- zone_vulnerables_designee_2021: false
+      -- pan_mis_en_oeuvre_de_facon_continue: true
+      -- installation_ou_modif_apres_entree_zone: false
+      -- statut_stockage: StatutStockageElevage.CapaciteSuffisante
+      -- date_signalement_administration: |2023-01-01|
+      -- travaux_accroissement_en_cours: false
+    } in
+    let _ = verification.operation <- EpandageOperation {
+      -- type_fertilisant: TypeFertilisant.TypeII
+      -- occupation_sol: OccupationSol.SolNonCultive
+      -- date_epandage: |2023-04-15|
+      -- sol_gele: false
+    } in
+    verification.epandage_interdit
+
+#test Test_SolNonCultive
+  ┌─[RESULT]─
+  │ resultat = true
+  └─
+
+# ==============================================================
+# TEST 2 — Épandage interdit : type II sur culture hivernale en octobre
+# Attendu : epandage_interdit = true
+# ==============================================================
+#
+# Épandage de lisier (type II) sur blé d'hiver le 10 octobre.
+# Période d'interdiction du 1er octobre au 31 janvier.
+
+declaration scope Test_TypeII_CultureHiverOctobre:
+  output resultat content boolean
+
+scope Test_TypeII_CultureHiverOctobre:
+  definition resultat equals
+    let verification scope ConformiteEpandage in
+    let _ = verification.elevage <- Elevage {
+      -- situe_en_zone_vulnerable: true
+      -- zone_vulnerables_designee_2021: false
+      -- pan_mis_en_oeuvre_de_facon_continue: true
+      -- installation_ou_modif_apres_entree_zone: false
+      -- statut_stockage: StatutStockageElevage.CapaciteSuffisante
+      -- date_signalement_administration: |2023-01-01|
+      -- travaux_accroissement_en_cours: false
+    } in
+    let _ = verification.operation <- EpandageOperation {
+      -- type_fertilisant: TypeFertilisant.TypeII
+      -- occupation_sol: OccupationSol.CulturePrincipaleHiverHorsColza
+      -- date_epandage: |2023-10-10|
+      -- sol_gele: false
+    } in
+    verification.epandage_interdit
+
+#test Test_TypeII_CultureHiverOctobre
+  ┌─[RESULT]─
+  │ resultat = true
+  └─
+
+# ==============================================================
+# TEST 3 — Épandage autorisé : type II sur culture hivernale en septembre
+# Attendu : epandage_interdit = false
+# ==============================================================
+#
+# Épandage de lisier (type II) sur blé d'hiver le 20 septembre.
+# Hors période d'interdiction pour le type II (qui commence le 1er oct).
+
+declaration scope Test_TypeII_CultureHiverSeptembre:
+  output resultat content boolean
+
+scope Test_TypeII_CultureHiverSeptembre:
+  definition resultat equals
+    let verification scope ConformiteEpandage in
+    let _ = verification.elevage <- Elevage {
+      -- situe_en_zone_vulnerable: true
+      -- zone_vulnerables_designee_2021: false
+      -- pan_mis_en_oeuvre_de_facon_continue: true
+      -- installation_ou_modif_apres_entree_zone: false
+      -- statut_stockage: StatutStockageElevage.CapaciteSuffisante
+      -- date_signalement_administration: |2023-01-01|
+      -- travaux_accroissement_en_cours: false
+    } in
+    let _ = verification.operation <- EpandageOperation {
+      -- type_fertilisant: TypeFertilisant.TypeII
+      -- occupation_sol: OccupationSol.CulturePrincipaleHiverHorsColza
+      -- date_epandage: |2023-09-20|
+      -- sol_gele: false
+    } in
+    not verification.epandage_interdit
+
+#test Test_TypeII_CultureHiverSeptembre
+  ┌─[RESULT]─
+  │ resultat = true
+  └─
+
+# ==============================================================
+# TEST 4 — Dérogation transitoire : élevage en travaux, type II, octobre
+# Attendu : epandage_autorise_par_derogation_transitoire = true
+#           epandage_interdit = false
+# ==============================================================
+#
+# Un élevage dont les travaux d'accroissement de stockage sont en cours
+# peut épandre du lisier (type II) sur blé d'hiver le 20 octobre.
+
+declaration scope Test_DerogationTransitoire_TypeII_Octobre:
+  output derogation_active content boolean
+
+scope Test_DerogationTransitoire_TypeII_Octobre:
+  definition derogation_active equals
+    let verification scope ConformiteEpandage in
+    let _ = verification.elevage <- Elevage {
+      -- situe_en_zone_vulnerable: true
+      -- zone_vulnerables_designee_2021: false
+      -- pan_mis_en_oeuvre_de_facon_continue: true
+      -- installation_ou_modif_apres_entree_zone: false
+      -- statut_stockage: StatutStockageElevage.EnCoursAugmentationCapacite
+      -- date_signalement_administration: |2023-01-01|
+      -- travaux_accroissement_en_cours: true
+    } in
+    let _ = verification.operation <- EpandageOperation {
+      -- type_fertilisant: TypeFertilisant.TypeII
+      -- occupation_sol: OccupationSol.CulturePrincipaleHiverHorsColza
+      -- date_epandage: |2023-10-20|
+      -- sol_gele: false
+    } in
+    verification.epandage_autorise_par_derogation_transitoire
+
+#test Test_DerogationTransitoire_TypeII_Octobre
+  ┌─[RESULT]─
+  │ derogation_active = true
+  └─
+
+# ==============================================================
+# TEST 5 — Zone désignée en 2021 : délai de signalement au 31 mars 2023
+# Attendu : date_limite_signalement = |2023-03-31|
+# ==============================================================
+
+declaration scope Test_DelaiZone2021:
+  output date_limite content date
+
+scope Test_DelaiZone2021:
+  definition date_limite equals
+    let calcul scope DelaisStockage in
+    let _ = calcul.elevage <- Elevage {
+      -- situe_en_zone_vulnerable: true
+      -- zone_vulnerables_designee_2021: true
+      -- pan_mis_en_oeuvre_de_facon_continue: false
+      -- installation_ou_modif_apres_entree_zone: true
+      -- statut_stockage: StatutStockageElevage.NouvellementEnZoneVulnerable
+      -- date_signalement_administration: |2023-02-01|
+      -- travaux_accroissement_en_cours: false
+    } in
+    let _ = calcul.date_entree_en_application_pan <- |2022-09-01| in
+    calcul.date_limite_signalement
+
+#test Test_DelaiZone2021
+  ┌─[RESULT]─
+  │ date_limite = |2023-03-31|
+  └─
+
+# ==============================================================
+# TEST 6 — Application des annexes : PAR régional publié après le 1er jan 2024
+# Attendu : date_application_annexes = |2024-01-01| (plafond)
+# ==============================================================
+
+declaration scope Test_ApplicationAnnexes_Plafond:
+  output date_application content date
+
+scope Test_ApplicationAnnexes_Plafond:
+  definition date_application equals
+    let calcul scope ApplicationAnnexes in
+    let _ = calcul.date_publication_arrete_regional <- |2024-06-15| in
+    calcul.date_application_annexes
+
+#test Test_ApplicationAnnexes_Plafond
+  ┌─[RESULT]─
+  │ date_application = |2024-01-01|
+  └─
+
+# ==============================================================
+# TEST 7 — Application des annexes : PAR régional publié avant le 1er jan 2024
+# Attendu : date_application_annexes = date de publication du PAR
+# ==============================================================
+
+declaration scope Test_ApplicationAnnexes_Normal:
+  output date_application content date
+
+scope Test_ApplicationAnnexes_Normal:
+  definition date_application equals
+    let calcul scope ApplicationAnnexes in
+    let _ = calcul.date_publication_arrete_regional <- |2023-07-01| in
+    calcul.date_application_annexes
+
+#test Test_ApplicationAnnexes_Normal
+  ┌─[RESULT]─
+  │ date_application = |2023-07-01|
+  └─
+
+# ==============================================================
+# TEST 8 — Épandage sur sol gelé avec type II : interdit
+# Attendu : epandage_interdit = true
+# ==============================================================
+
+declaration scope Test_SolGele_TypeII:
+  output resultat content boolean
+
+scope Test_SolGele_TypeII:
+  definition resultat equals
+    let verification scope ConformiteEpandage in
+    let _ = verification.elevage <- Elevage {
+      -- situe_en_zone_vulnerable: true
+      -- zone_vulnerables_designee_2021: false
+      -- pan_mis_en_oeuvre_de_facon_continue: true
+      -- installation_ou_modif_apres_entree_zone: false
+      -- statut_stockage: StatutStockageElevage.CapaciteSuffisante
+      -- date_signalement_administration: |2023-01-01|
+      -- travaux_accroissement_en_cours: false
+    } in
+    let _ = verification.operation <- EpandageOperation {
+      -- type_fertilisant: TypeFertilisant.TypeII
+      -- occupation_sol: OccupationSol.PrairiePermanenteOuLuzerne
+      -- date_epandage: |2024-01-08|
+      -- sol_gele: true
+    } in
+    verification.epandage_interdit
+
+#test Test_SolGele_TypeII
+  ┌─[RESULT]─
+  │ resultat = true
+  └─
+
+# ==============================================================
+# TEST 9 — Entrée en vigueur de l'arrêté
+# Attendu : date_entree_en_vigueur = |2023-02-10|
+# ==============================================================
+
+declaration scope Test_EntreeEnVigueur:
+  output date_vigueur content date
+
+scope Test_EntreeEnVigueur:
+  definition date_vigueur equals
+    let ev scope EntreeEnVigueur in
+    ev.date_entree_en_vigueur
+
+#test Test_EntreeEnVigueur
+  ┌─[RESULT]─
+  │ date_vigueur = |2023-02-10|
+  └─
+```
