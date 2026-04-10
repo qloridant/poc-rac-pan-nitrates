@@ -1,4 +1,4 @@
-# catala-pan-nitrates-2023
+# POC : Implémentation en Catala de la réglementation PAN Nitrate
 
 Codification en langage [**Catala**](https://catala-lang.org) de l'arrêté du 30 janvier 2023 modifiant l'arrêté du 19 décembre 2011 relatif au **programme d'actions national (PAN) dans les zones vulnérables**, afin de réduire la pollution des eaux par les nitrates d'origine agricole.
 
